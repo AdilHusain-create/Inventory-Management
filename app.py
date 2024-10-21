@@ -1,8 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from tortoise.contrib.fastapi import register_tortoise
-from models import supplier_pydantic, supplier_pydanticInput, Supplier
-from models import product_pydantic, product_pydanticInput, Product
-import asyncio
+from SQL.models import supplier_pydantic, supplier_pydanticInput, Supplier
+from SQL.models import product_pydantic, product_pydanticInput, Product
 from tortoise import Tortoise
 import logging
 
@@ -140,7 +139,7 @@ async def init_db():
 register_tortoise(
     IMapp,
     db_url="sqlite://db.sqlite3",
-    modules={"models": ["models"]},
+    modules={"models": ["SQL.models"]},
     generate_schemas=True,
     add_exception_handlers=True
 )
