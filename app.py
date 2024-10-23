@@ -3,15 +3,40 @@ from tortoise.contrib.fastapi import register_tortoise
 from SQL.models import supplier_pydantic, supplier_pydanticInput, Supplier
 from SQL.models import product_pydantic, product_pydanticInput, Product
 from tortoise import Tortoise
+from fastapi.responses import HTMLResponse, RedirectResponse
+from Services.email_services import EmailSchema, send_email
 import logging
+from tortoise.exceptions import DoesNotExist
 
 
 #initilize the FastAPI app
 IMapp = FastAPI()
 
+# Tortoise-ORM
+async def init_db():
+    await Tortoise.init(
+        db_url="sqlite://db.sqlite3",
+        modules={"models":["SQL.models"]}
+    )
+    await Tortoise.generate_schemas(safe=True)
+
+
+# Registering the Tortoise ORM using the config.py file
+register_tortoise(
+    IMapp,
+    db_url="sqlite://db.sqlite3",
+    modules={"models": ["SQL.models"]},
+    generate_schemas=True,
+    add_exception_handlers=True
+)
+
+
+@IMapp.get("/", response_class = RedirectResponse)
+async def redirect_to_myapp():
+    return RedirectResponse(url="/Inventory-Management")
 
 @IMapp.get("/Inventory-Management")
-def homepage():
+async def homepage():
     return {"Message" : "This is the Home Page"}
 
 
@@ -95,9 +120,9 @@ async def create_product(supplier_id: int, product_info: product_pydanticInput):
 
 
 # Get All Product api
-@IMapp.get("/product/")
+@IMapp.get("/product")
 async def get_all_products():
-    response = await product_pydantic.from_queryset(Product.all)
+    response = await product_pydantic.from_queryset(Product.all())
     return{"Status":"200", "data":response }
 
 # Get Product by id api
@@ -115,31 +140,42 @@ async def update_product(product_id: int, update_info: product_pydanticInput):
     product.quantity_in_stock = update_info['quantity_in_stock']
     product.sold = update_info['quantity_sold']
     product.unit_price = update_info['unit_price']
-    product.revenue = update_info['quantity_sold'] * update_info['unit_price']
+    product.revenue = (update_info['quantity_sold'] * update_info['unit_price']) + update_info['revenue']
     await product.save()
     response = await product_pydantic.from_tortoise_orm(product)
     return {"Status":"200", "data": "Data Updated Successfully" }
 
+# Delete product api
 @IMapp.delete("/product/{product_id}")
 async def delete_product(product_id: int):
     product_delete = await Product.filter(id=product_id).first()
     product_name = product_delete.name
     response = await product_delete.delete()
-    return {"Status": "200", "Message": "Product {product_name} deleted Successfully"}
+    return {"Status": "200", "Message": f"Product '{product_name}' deleted Successfully"}
+
+
+# Email send API
+@IMapp.post("/send-email/{product_id}")
+async def send_email_endpoint(product_id: int):
+    try:
+        product = await Product.get(id=product_id).prefetch_related('supplied_by')
+        supplier = await product.supplied_by
+
+        await send_email(
+            supplier_email=supplier.email,
+            supplier_name=supplier.name,
+            product_name=product.name,
+            company_name=supplier.company
+        )
+        return{"Status":"200", "Message": f"Email Successfully sent to {supplier.name}"}
+    except DoesNotExist:
+        raise HTTPException(status_code=404, detail="Product not found")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
 
 
 
-async def init_db():
-    await Tortoise.init(
-        db_url="sqlite://db.sqlite3",
-        modules={"models":["src.models"]}
-    )
-    await Tortoise.generate_schemas(safe=True)
-# Registering the Tortoise ORM using the config.py file
-register_tortoise(
-    IMapp,
-    db_url="sqlite://db.sqlite3",
-    modules={"models": ["SQL.models"]},
-    generate_schemas=True,
-    add_exception_handlers=True
-)
+
+
+
+
