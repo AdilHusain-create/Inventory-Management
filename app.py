@@ -7,7 +7,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from Services.email_services import EmailSchema, send_email
 import logging
 from tortoise.exceptions import DoesNotExist
-
+from starlette.middleware.cors import CORSMiddleware
 
 #initilize the FastAPI app
 IMapp = FastAPI()
@@ -28,6 +28,17 @@ register_tortoise(
     modules={"models": ["SQL.models"]},
     generate_schemas=True,
     add_exception_handlers=True
+)
+
+# Setting Up CORS - Cross Origin Resource Sharing
+origins = [ "https://localhost:3000" ]
+
+IMapp.add_middleware(
+    CORSMiddleware,
+    origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"]
 )
 
 
